@@ -1,78 +1,192 @@
-"use client"
+"use client";
 
-import { Building2, KeyRound, User as UserIcon } from "lucide-react"
+import { KeyRound, Mail, AlertCircle, Eye, EyeOff } from "lucide-react";
+import { useActionState, useState } from "react";
+import { Turnstile } from "@marsidev/react-turnstile";
+import { loginAction } from "./actions";
+import Image from "next/image";
+
+const initialState = {
+  error: null as string | null,
+};
 
 export default function LoginPage() {
+  const [state, formAction, isPending] = useActionState(
+    loginAction,
+    initialState,
+  );
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
-      <div className="w-full max-w-md overflow-hidden rounded-2xl border bg-card shadow-xl">
-        <div className="bg-primary px-6 py-10 text-center text-primary-foreground">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm">
-            <Building2 className="h-8 w-8" />
+    <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[#F8FAFC] p-4 sm:p-8">
+      {/* Premium Background Gradients */}
+      <div className="absolute inset-0 z-0 overflow-hidden">
+        <div className="absolute -left-[20%] top-[-10%] h-[70vh] w-[70vw] rounded-full bg-emerald-100/50 blur-[120px]" />
+        <div className="absolute -right-[20%] bottom-[-10%] h-[70vh] w-[70vw] rounded-full bg-emerald-50/50 blur-[120px]" />
+      </div>
+
+      <div className="relative z-10 w-full max-w-[440px]">
+        {/* Header Section */}
+        <div className="mb-8 flex flex-col items-center text-center">
+          <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-white p-3 shadow-sm ring-1 ring-emerald-100">
+            <Image
+              src="/kemenag.svg"
+              alt="Logo Kemenag"
+              width={64}
+              height={64}
+              className="h-full w-full object-contain"
+            />
           </div>
-          <h1 className="text-2xl font-bold">E-Arsip Kemenag</h1>
-          <p className="text-primary-foreground/80 mt-2 text-sm">
-            Kabupaten Barito Utara
+          <div className="flex items-center gap-2">
+            <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            <span className="text-xs font-bold tracking-[0.2em] text-emerald-600">
+              PORTAL INTERNAL
+            </span>
+          </div>
+          <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
+            E-ARSIP KEMENAG
+          </h1>
+          <p className="mt-2 text-xs font-medium tracking-widest text-slate-500 uppercase">
+            Kementerian Agama Kabupaten Barito Utara
           </p>
         </div>
 
-        <div className="p-6 md:p-8">
-          <form className="space-y-6" onSubmit={(e) => e.preventDefault()}>
+        {/* Main Card */}
+        <div className="overflow-hidden rounded-[2.5rem] bg-white p-8 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] ring-1 ring-slate-100 sm:p-10">
+          <form action={formAction} className="space-y-6">
+            {state.error && (
+              <div className="flex animate-in fade-in slide-in-from-top-2 items-start gap-3 rounded-2xl bg-red-50 p-4 text-sm text-red-600 ring-1 ring-red-100">
+                <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+                <p className="font-medium">{state.error}</p>
+              </div>
+            )}
+
             <div className="space-y-2">
-              <label className="text-sm font-medium leading-none" htmlFor="username">
-                Username
+              <label
+                className="ml-1 text-[11px] font-bold tracking-wider text-slate-500 uppercase"
+                htmlFor="email"
+              >
+                Email Admin
               </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 flex items-center pl-3 text-muted-foreground">
-                  <UserIcon className="h-5 w-5" />
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">
+                  <Mail className="h-5 w-5" />
                 </div>
                 <input
-                  id="username"
-                  className="flex h-12 w-full rounded-md border border-input bg-transparent px-3 py-1 pl-10 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  placeholder="Masukkan username"
-                  type="text"
-                  autoComplete="username"
+                  id="email"
+                  name="email"
+                  className="flex h-14 w-full rounded-2xl border-0 bg-slate-50 px-4 py-2 pl-11 text-sm font-medium text-slate-900 transition-all placeholder:text-slate-400 hover:bg-slate-100 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:outline-none"
+                  placeholder="baritoutara@kemenag.go.id"
+                  type="email"
+                  autoComplete="email"
                   required
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium leading-none" htmlFor="password">
+              <label
+                className="ml-1 text-[11px] font-bold tracking-wider text-slate-500 uppercase"
+                htmlFor="password"
+              >
                 Password
               </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 flex items-center pl-3 text-muted-foreground">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">
                   <KeyRound className="h-5 w-5" />
                 </div>
                 <input
                   id="password"
-                  className="flex h-12 w-full rounded-md border border-input bg-transparent px-3 py-1 pl-10 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  placeholder="Masukkan password"
-                  type="password"
+                  name="password"
+                  className="flex h-14 w-full rounded-2xl border-0 bg-slate-50 px-4 py-2 pl-11 pr-11 text-sm font-medium text-slate-900 transition-all placeholder:text-slate-400 hover:bg-slate-100 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:outline-none"
+                  placeholder="••••••••••••"
+                  type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
                   required
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 flex items-center pr-4 text-slate-400 hover:text-emerald-600 focus:outline-none transition-colors"
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-5 w-5" />
+                  ) : (
+                    <Eye className="h-5 w-5" />
+                  )}
+                </button>
               </div>
             </div>
 
-            {/* Turnstile Mock */}
-            <div className="flex h-[78px] w-full items-center justify-center rounded-md border border-dashed bg-muted/50">
-              <span className="text-xs text-muted-foreground">
-                [Cloudflare Turnstile Widget]
+            <div className="flex items-center gap-3 py-1">
+              <button
+                type="button"
+                onClick={() => setRememberMe(!rememberMe)}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 ${
+                  rememberMe ? "bg-emerald-600" : "bg-slate-200"
+                }`}
+                role="switch"
+                aria-checked={rememberMe}
+              >
+                <span className="sr-only">Ingat Saya</span>
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    rememberMe ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+              <span
+                className="text-[11px] font-bold tracking-wider text-slate-600 uppercase cursor-pointer select-none"
+                onClick={() => setRememberMe(!rememberMe)}
+              >
+                Ingat Saya
               </span>
             </div>
 
+            <div className="flex w-full items-center justify-center py-2">
+              <Turnstile
+                siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || ""}
+                options={{
+                  theme: "light",
+                }}
+              />
+            </div>
+
             <button
-              className="inline-flex h-12 w-full items-center justify-center whitespace-nowrap rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+              className="group relative inline-flex h-14 w-full items-center justify-center overflow-hidden rounded-2xl bg-emerald-600 px-8 text-sm font-bold tracking-wider text-white uppercase shadow-lg shadow-emerald-600/20 transition-all hover:bg-emerald-700 hover:shadow-xl hover:shadow-emerald-600/30 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-70"
               type="submit"
+              disabled={isPending}
             >
-              Masuk Sistem
+              <span className="relative flex items-center gap-2">
+                {isPending ? "Memproses..." : "Masuk Ke Dashboard"}
+                {!isPending && (
+                  <svg
+                    className="h-4 w-4 transition-transform group-hover:translate-x-1"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2.5}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M13 7l5 5m0 0l-5 5m5-5H6"
+                    />
+                  </svg>
+                )}
+              </span>
             </button>
           </form>
         </div>
       </div>
+
+      <div className="relative z-10 mt-12 text-center">
+        <p className="text-[10px] font-bold tracking-[0.2em] text-slate-400 uppercase">
+          © {new Date().getFullYear()} E-Arsip Kemenag Barito Utara
+        </p>
+      </div>
     </div>
-  )
+  );
 }

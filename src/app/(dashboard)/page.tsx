@@ -1,64 +1,180 @@
 import { PageBanner } from "@/components/ui/PageBanner"
 import { LayoutDashboard, FileText, HardDrive, Clock } from "lucide-react"
+import { createClient } from "@/lib/supabase/server"
 
-export default function DashboardPage() {
+function formatBytes(bytes: number, decimals = 2) {
+  if (!+bytes) return '0 B'
+  const k = 1024
+  const dm = decimals < 0 ? 0 : decimals
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`
+}
+
+function getSplitBytes(bytes: number) {
+  const formatted = formatBytes(bytes)
+  const parts = formatted.split(' ')
+  return { value: parts[0], unit: parts[1] || '' }
+}
+
+function getIconForMimeType(mimeType: string | null) {
+  if (!mimeType) return <FileText className="h-5 w-5 text-slate-500" />
+  if (mimeType.includes("pdf")) return <FileText className="h-5 w-5 text-rose-500" />
+  if (mimeType.includes("image")) return <FileText className="h-5 w-5 text-emerald-500" /> // Using FileText for image as generic fallback since ImageIcon is not imported
+  return <FileText className="h-5 w-5 text-slate-500" />
+}
+
+export default async function DashboardPage() {
+  const supabase = await createClient()
+  
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+
+  const { data: metadata } = await supabase
+    .from('users_metadata')
+    .select('bidang_id, role')
+    .eq('id', user.id)
+    .single()
+
+  const isSuperAdmin = metadata?.role === 'super_admin'
+
+  // Query Files
+  let queryFiles = supabase
+    .from('files')
+    .select('id, size_bytes, created_at, name, mime_type', { count: 'exact' })
+    .is('deleted_at', null)
+
+  if (!isSuperAdmin && metadata?.bidang_id) {
+    queryFiles = queryFiles.eq('bidang_id', metadata.bidang_id)
+  }
+
+  const { data: allFiles, count: totalFiles } = await queryFiles
+
+  const totalStorage = allFiles?.reduce((acc, file) => acc + (file.size_bytes || 0), 0) || 0
+  const storageFormatted = getSplitBytes(totalStorage)
+  
+  const oneDayAgo = new Date()
+  oneDayAgo.setDate(oneDayAgo.getDate() - 1)
+  const recentFilesCount = allFiles?.filter(f => new Date(f.created_at) > oneDayAgo).length || 0
+
+  // Recent 5 uploads
+  const recentUploads = [...(allFiles || [])]
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 5)
+
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-8 pb-10">
       <PageBanner
         title="Dashboard Statistik"
         description="Ringkasan penggunaan sistem E-Arsip Kementerian Agama Kabupaten Barito Utara"
-        icon={<LayoutDashboard className="h-6 w-6 text-white" />}
+        icon={<LayoutDashboard className="h-8 w-8 text-white" />}
       />
 
       {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border bg-card p-6 shadow-sm">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <FileText className="h-6 w-6" />
-            </div>
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="group relative overflow-hidden rounded-3xl bg-white p-8 shadow-sm ring-1 ring-slate-100 transition-all hover:shadow-lg hover:ring-emerald-100">
+          <div className="absolute right-0 top-0 -mt-4 -mr-4 h-24 w-24 rounded-full bg-emerald-50 opacity-50 transition-transform group-hover:scale-150" />
+          <div className="relative flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-muted-foreground">Total Dokumen</p>
-              <h3 className="text-2xl font-bold">1,248</h3>
+              <p className="text-xs font-bold tracking-wider text-slate-500 uppercase">Total Dokumen</p>
+              <h3 className="mt-2 text-4xl font-black text-slate-900">{totalFiles || 0}</h3>
             </div>
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600 shadow-inner">
+              <FileText className="h-8 w-8" />
+            </div>
+          </div>
+          <div className="relative mt-6 flex items-center gap-2 text-xs font-medium text-emerald-600">
+            <span>Data {isSuperAdmin ? "Seluruh Kemenag" : "Bidang Anda"}</span>
           </div>
         </div>
         
-        <div className="rounded-xl border bg-card p-6 shadow-sm">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-500/10 text-blue-500">
-              <HardDrive className="h-6 w-6" />
-            </div>
+        <div className="group relative overflow-hidden rounded-3xl bg-white p-8 shadow-sm ring-1 ring-slate-100 transition-all hover:shadow-lg hover:ring-blue-100">
+          <div className="absolute right-0 top-0 -mt-4 -mr-4 h-24 w-24 rounded-full bg-blue-50 opacity-50 transition-transform group-hover:scale-150" />
+          <div className="relative flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-muted-foreground">Total Storage</p>
-              <h3 className="text-2xl font-bold">4.2 GB</h3>
+              <p className="text-xs font-bold tracking-wider text-slate-500 uppercase">Total Storage</p>
+              <h3 className="mt-2 text-4xl font-black text-slate-900">
+                {storageFormatted.value} <span className="text-xl text-slate-400">{storageFormatted.unit}</span>
+              </h3>
             </div>
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-100 text-blue-600 shadow-inner">
+              <HardDrive className="h-8 w-8" />
+            </div>
+          </div>
+          <div className="relative mt-6 flex items-center gap-2 text-xs font-medium text-slate-500">
+            <span>Kapasitas Terpakai</span>
           </div>
         </div>
 
-        <div className="rounded-xl border bg-card p-6 shadow-sm">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-orange-500/10 text-orange-500">
-              <Clock className="h-6 w-6" />
-            </div>
+        <div className="group relative overflow-hidden rounded-3xl bg-white p-8 shadow-sm ring-1 ring-slate-100 transition-all hover:shadow-lg hover:ring-orange-100">
+          <div className="absolute right-0 top-0 -mt-4 -mr-4 h-24 w-24 rounded-full bg-orange-50 opacity-50 transition-transform group-hover:scale-150" />
+          <div className="relative flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-muted-foreground">Baru Diunggah</p>
-              <h3 className="text-2xl font-bold">24</h3>
+              <p className="text-xs font-bold tracking-wider text-slate-500 uppercase">Baru Diunggah</p>
+              <h3 className="mt-2 text-4xl font-black text-slate-900">{recentFilesCount}</h3>
             </div>
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-orange-100 text-orange-600 shadow-inner">
+              <Clock className="h-8 w-8" />
+            </div>
+          </div>
+          <div className="relative mt-6 flex items-center gap-2 text-xs font-medium text-slate-500">
+            <span>Dalam 24 jam terakhir</span>
           </div>
         </div>
       </div>
 
       {/* Recent Uploads Table Placeholder */}
-      <div className="rounded-xl border bg-card shadow-sm">
-        <div className="border-b px-6 py-4">
-          <h3 className="font-semibold">Dokumen Terbaru</h3>
-        </div>
-        <div className="p-6">
-          <div className="flex h-32 items-center justify-center rounded-lg border border-dashed">
-            <p className="text-sm text-muted-foreground">Tabel dokumen terbaru akan ditampilkan di sini</p>
+      <div className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-100">
+        <div className="flex items-center justify-between border-b border-slate-100 px-8 py-6 bg-slate-50/50">
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">Dokumen Terbaru</h3>
+            <p className="text-xs font-medium text-slate-500 mt-1">Aktivitas unggahan terakhir di sistem E-Arsip</p>
           </div>
         </div>
+        
+        {recentUploads.length === 0 ? (
+          <div className="p-8">
+            <div className="flex h-48 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50">
+              <FileText className="mb-3 h-8 w-8 text-slate-300" />
+              <p className="text-sm font-bold text-slate-500">Belum ada dokumen</p>
+              <p className="mt-1 text-xs text-slate-400">Dokumen yang baru diunggah akan muncul di sini</p>
+            </div>
+          </div>
+        ) : (
+          <div className="w-full">
+            <div className="hidden md:flex w-full bg-slate-50/90 border-b border-slate-100">
+              <div className="w-1/2 px-8 py-3 text-[11px] font-bold tracking-wider text-slate-500 uppercase">Nama Dokumen</div>
+              <div className="w-1/4 px-8 py-3 text-[11px] font-bold tracking-wider text-slate-500 uppercase">Ukuran</div>
+              <div className="w-1/4 px-8 py-3 text-[11px] font-bold tracking-wider text-slate-500 uppercase text-right">Waktu Unggah</div>
+            </div>
+            <div className="flex flex-col divide-y divide-slate-50">
+              {recentUploads.map((file) => (
+                <div key={file.id} className="flex flex-col md:flex-row md:items-center hover:bg-slate-50/50 transition-colors py-2 md:py-0">
+                  <div className="w-full md:w-1/2 px-8 py-3 flex items-center gap-3">
+                    <div className="flex-shrink-0">
+                      {getIconForMimeType(file.mime_type)}
+                    </div>
+                    <span className="font-semibold text-slate-700 text-sm truncate">{file.name}</span>
+                  </div>
+                  <div className="w-full md:w-1/4 px-8 py-1 md:py-3 text-sm text-slate-500">
+                    <span className="md:hidden text-xs font-bold uppercase tracking-wider text-slate-400 mr-2">Ukuran:</span>
+                    {formatBytes(file.size_bytes)}
+                  </div>
+                  <div className="w-full md:w-1/4 px-8 py-1 md:py-3 text-sm text-slate-500 md:text-right">
+                    <span className="md:hidden text-xs font-bold uppercase tracking-wider text-slate-400 mr-2">Waktu:</span>
+                    {new Date(file.created_at).toLocaleDateString("id-ID", { 
+                      day: "numeric", 
+                      month: "short", 
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit"
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
