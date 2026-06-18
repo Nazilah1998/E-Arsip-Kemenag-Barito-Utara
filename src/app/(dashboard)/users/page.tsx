@@ -38,12 +38,14 @@ export default async function UsersManagementPage() {
     `)
     .order('created_at', { ascending: false })
 
-  const users = (usersData || []).map((u: { id: string; username: string; full_name: string; role: string; bidang: { name: string } | null }) => ({
-    id: u.id,
-    username: u.username,
-    full_name: u.full_name,
-    role: u.role,
-    bidang: u.bidang?.name || null
+  const users = (usersData || []).map((u) => ({
+    id: u.id as string,
+    username: u.username as string,
+    full_name: u.full_name as string,
+    role: u.role as string,
+    bidang: Array.isArray(u.bidang)
+      ? (u.bidang[0]?.name ?? null)
+      : ((u.bidang as { name: string } | null)?.name ?? null),
   }))
 
   // Fetch bidang list for the dropdown
