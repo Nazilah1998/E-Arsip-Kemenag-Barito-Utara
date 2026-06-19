@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { FolderPlus, X, Loader2 } from "lucide-react"
 import { createFolder } from "@/app/(dashboard)/folders/actions"
+import { toast } from "sonner"
 
 interface CreateFolderModalProps {
   isOpen: boolean
@@ -30,6 +31,7 @@ export function CreateFolderModal({ isOpen, onClose, parentId }: CreateFolderMod
     if (result.success) {
       setName("")
       onClose()
+      toast.success("Folder berhasil dibuat.")
     } else {
       setError(result.error || "Gagal membuat folder")
     }

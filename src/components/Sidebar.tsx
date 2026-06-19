@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
+import { StorageQuotaWidget } from "./StorageQuotaWidget";
 
 const mainNavigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
@@ -75,7 +76,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
           </div>
           <div>
             <h2 className="text-sm font-bold tracking-wider text-white">
-              E-ARSIP
+              E-ARSIP DIGITAL
             </h2>
             <p className="text-[10px] text-slate-400 tracking-widest uppercase">
               Kemenag Barito Utara
@@ -115,7 +116,10 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
       </nav>
 
       {/* Footer Sidebar */}
-      <div className="border-t border-slate-800 p-6">
+      <div className="p-6 pb-4">
+        <StorageQuotaWidget />
+      </div>
+      <div className="border-t border-slate-800 p-6 pt-4">
         <div className="rounded-xl bg-slate-800/50 p-4 border border-slate-700/50">
           <p className="text-xs font-semibold text-white">Butuh Bantuan?</p>
           <p className="mt-1 text-[10px] text-slate-400 leading-relaxed">

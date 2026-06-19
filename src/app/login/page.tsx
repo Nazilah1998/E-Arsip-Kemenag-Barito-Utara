@@ -77,7 +77,7 @@ export default function LoginPage() {
                   id="email"
                   name="email"
                   className="flex h-14 w-full rounded-2xl border-0 bg-slate-50 px-4 py-2 pl-11 text-sm font-medium text-slate-900 transition-all placeholder:text-slate-400 hover:bg-slate-100 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:outline-none"
-                  placeholder="baritoutara@kemenag.go.id"
+                  placeholder="admin@kemenag.go.id"
                   type="email"
                   autoComplete="email"
                   required

@@ -7,31 +7,32 @@ import {
   CellContext,
   getPaginationRowModel,
   getSortedRowModel,
-  SortingState
+  SortingState,
+  Table,
+  Row
 } from "@tanstack/react-table"
-import { FileIcon, Folder as FolderIcon, FileText, Image as ImageIcon, Download, Eye, Trash2, ChevronLeft, ChevronRight, Loader2, Pencil, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
-import { useState } from "react"
+import { useState, useEffect, useMemo } from "react"
+import { FileIcon, Folder as FolderIcon, FileText, Image as ImageIcon, Download, Eye, Trash2, ChevronLeft, ChevronRight, Loader2, Pencil, ArrowUpDown, ArrowUp, ArrowDown, Info, Link2 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { FilePreviewModal } from "./FilePreviewModal"
 import { DeleteConfirmModal } from "./DeleteConfirmModal"
 import { RenameItemModal } from "./RenameItemModal"
+import { MoveItemModal } from "./MoveItemModal"
 import { deleteItem, renameItem, moveItem } from "@/app/(dashboard)/folders/actions"
+import { toast } from "sonner"
 
-interface FileItem {
-  id: string
-  name: string
-  type: "folder" | "file"
-  mimeType?: string
-  size?: string
-  updatedAt: string
-  isRestricted: boolean
-  objectKey?: string
-}
+import type { FileItem } from "@/types"
 
 interface FileTableProps {
   data: FileItem[]
   onNavigate?: (id: string) => void
+  onFilesDrop?: (files: File[]) => void
+  onShowInfo?: (item: FileItem) => void
   folderId?: string
+  searchQuery?: string
+  viewMode?: "list" | "grid"
+  filterType?: string
+  filterDate?: string
 }
 
 const getIcon = (item: FileItem) => {
@@ -41,7 +42,7 @@ const getIcon = (item: FileItem) => {
   return <FileIcon className="h-5 w-5 text-slate-500" />
 }
 
-export function FileTable({ data, onNavigate, folderId }: FileTableProps) {
+export function FileTable({ data, onNavigate, onFilesDrop, onShowInfo, folderId, searchQuery = "", viewMode = "list", filterType = "all", filterDate = "all" }: FileTableProps) {
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
@@ -53,11 +54,49 @@ export function FileTable({ data, onNavigate, folderId }: FileTableProps) {
 
   const [itemToRename, setItemToRename] = useState<FileItem | null>(null)
   const [sorting, setSorting] = useState<SortingState>([])
+  const [rowSelection, setRowSelection] = useState({})
 
   const [draggedItem, setDraggedItem] = useState<FileItem | null>(null)
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null)
   const [isMoving, setIsMoving] = useState(false)
   const [optimisticHiddenIds, setOptimisticHiddenIds] = useState<string[]>([])
+  
+  const [itemsToMove, setItemsToMove] = useState<FileItem[]>([])
+  
+  const [contextMenu, setContextMenu] = useState<{ visible: boolean; x: number; y: number; item: FileItem | null }>({
+    visible: false,
+    x: 0,
+    y: 0,
+    item: null,
+  })
+
+  useEffect(() => {
+    const handleClickOutside = () => setContextMenu({ ...contextMenu, visible: false })
+    document.addEventListener("click", handleClickOutside)
+    return () => document.removeEventListener("click", handleClickOutside)
+  }, [contextMenu])
+
+  const handleContextMenu = (e: React.MouseEvent, item: FileItem) => {
+    e.preventDefault()
+    setContextMenu({
+      visible: true,
+      x: e.clientX,
+      y: e.clientY,
+      item,
+    })
+  }
+
+  const handleCopyLink = async (item: FileItem) => {
+    if (!item.objectKey) return
+    try {
+      const url = await getSignedUrl(item.objectKey, false)
+      await navigator.clipboard.writeText(url)
+      toast.success("Tautan berhasil disalin ke clipboard.")
+    } catch (error) {
+      console.error(error)
+      toast.error("Gagal membuat tautan.")
+    }
+  }
   
   const supabase = createClient()
   const bucketName = process.env.NEXT_PUBLIC_SUPABASE_ARSIP_BUCKET || "Files-arsip"
@@ -83,7 +122,7 @@ export function FileTable({ data, onNavigate, folderId }: FileTableProps) {
       document.body.removeChild(a)
     } catch (error) {
       console.error("Download failed:", error)
-      alert("Gagal mengunduh file. Akses ditolak atau file tidak ditemukan.")
+      toast.error("Gagal mengunduh file. Akses ditolak atau file tidak ditemukan.")
     } finally {
       setDownloadingId(null)
     }
@@ -127,9 +166,10 @@ export function FileTable({ data, onNavigate, folderId }: FileTableProps) {
         throw new Error(result.error)
       }
       setItemToDelete(null)
+      toast.success("Item berhasil dipindahkan ke Trash.")
     } catch (error) {
       console.error("Delete failed:", error)
-      alert("Gagal menghapus item.")
+      toast.error("Gagal menghapus item.")
     } finally {
       setIsDeleting(false)
     }
@@ -139,6 +179,7 @@ export function FileTable({ data, onNavigate, folderId }: FileTableProps) {
     if (!itemToRename) return
     const result = await renameItem(itemToRename.id, itemToRename.type, newName, folderId || null)
     if (!result.success) throw new Error(result.error)
+    toast.success("Nama berhasil diubah.")
   }
 
   const handleDragStart = (e: React.DragEvent, item: FileItem) => {
@@ -147,30 +188,38 @@ export function FileTable({ data, onNavigate, folderId }: FileTableProps) {
       return
     }
     setDraggedItem(item)
-    e.dataTransfer.setData("text/plain", item.id)
+    e.dataTransfer.setData("application/json", JSON.stringify({ id: item.id, type: item.type }))
     e.dataTransfer.effectAllowed = "move"
   }
 
-  const handleDragOver = (e: React.DragEvent, item: FileItem) => {
+  const handleDragOver = (e: React.DragEvent, item?: FileItem) => {
     e.preventDefault()
     e.dataTransfer.dropEffect = "move"
-    if (item.type === "folder" && item.id !== draggedItem?.id && !isMoving) {
+    if (item && item.type === "folder" && item.id !== draggedItem?.id && !isMoving) {
       setDragOverFolderId(item.id)
     }
   }
 
-  const handleDragLeave = (e: React.DragEvent, item: FileItem) => {
+  const handleDragLeave = (e: React.DragEvent, item?: FileItem) => {
     e.preventDefault()
-    if (dragOverFolderId === item.id) {
+    if (item && dragOverFolderId === item.id) {
       setDragOverFolderId(null)
     }
   }
 
-  const handleDrop = async (e: React.DragEvent, targetItem: FileItem) => {
+  const handleDrop = async (e: React.DragEvent, targetItem?: FileItem) => {
     e.preventDefault()
     setDragOverFolderId(null)
     
-    if (!draggedItem || targetItem.type !== "folder" || draggedItem.id === targetItem.id) return
+    // Check if dropping external files
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      if (onFilesDrop) {
+        onFilesDrop(Array.from(e.dataTransfer.files))
+      }
+      return
+    }
+
+    if (!targetItem || !draggedItem || targetItem.type !== "folder" || draggedItem.id === targetItem.id) return
     
     setIsMoving(true)
     
@@ -185,16 +234,43 @@ export function FileTable({ data, onNavigate, folderId }: FileTableProps) {
         setOptimisticHiddenIds((prev) => prev.filter(id => id !== movedItemId))
         throw new Error(result.error)
       }
+      toast.success("Item berhasil dipindahkan.")
     } catch (error) {
       console.error("Move failed:", error)
-      alert("Gagal memindahkan file/folder.")
+      toast.error("Gagal memindahkan file/folder.")
     } finally {
       setIsMoving(false)
       setDraggedItem(null)
     }
   }
 
-  const columns = [
+  const columns = useMemo(() => [
+    {
+      id: "select",
+      header: ({ table }: { table: Table<FileItem> }) => (
+        <div className="flex h-full items-center">
+          <input
+            type="checkbox"
+            className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4 cursor-pointer"
+            checked={table.getIsAllPageRowsSelected()}
+            onChange={table.getToggleAllPageRowsSelectedHandler()}
+          />
+        </div>
+      ),
+      meta: { className: "w-10 lg:w-12 flex-shrink-0 flex items-center justify-center" },
+      cell: ({ row }: { row: Row<FileItem> }) => (
+        <div className="flex h-full items-center">
+          <input
+            type="checkbox"
+            className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4 cursor-pointer"
+            checked={row.getIsSelected()}
+            disabled={!row.getCanSelect() || row.original.isRestricted}
+            onChange={row.getToggleSelectedHandler()}
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      ),
+    },
     {
       header: "Nama File/Folder",
       accessorKey: "name",
@@ -265,13 +341,38 @@ export function FileTable({ data, onNavigate, folderId }: FileTableProps) {
                 )}
               </button>
             )}
-            {(item.mimeType?.includes("pdf") || item.mimeType?.includes("image") || item.mimeType?.includes("word") || item.mimeType?.includes("excel")) && (
+            {item.type !== "folder" && (item.mimeType?.includes("pdf") || item.mimeType?.includes("image")) && (
               <button 
                 title="Lihat Pratinjau"
-                onClick={() => handlePreview(item)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handlePreview(item)
+                }}
                 className="rounded-lg p-2 text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors"
               >
                 <Eye className="h-4 w-4" />
+              </button>
+            )}
+            <button 
+              title="Detail File"
+              onClick={(e) => {
+                e.stopPropagation()
+                if (onShowInfo) onShowInfo(item)
+              }}
+              className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+            >
+              <Info className="h-4 w-4" />
+            </button>
+            {!item.isRestricted && (
+              <button 
+                title="Pindahkan"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setItemsToMove([item])
+                }}
+                className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+              >
+                <FolderIcon className="h-4 w-4" />
               </button>
             )}
             {!item.isRestricted && (
@@ -300,10 +401,42 @@ export function FileTable({ data, onNavigate, folderId }: FileTableProps) {
         )
       },
     },
-  ]
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [onNavigate, folderId, searchQuery, itemToRename, itemToDelete])
 
-  // Filter out optimistically hidden items
-  const visibleData = data.filter((item) => !optimisticHiddenIds.includes(item.id))
+  // Filter out optimistically hidden items and apply search & advanced filters
+  const visibleData = useMemo(() => {
+    return data.filter((item) => {
+      if (optimisticHiddenIds.includes(item.id)) return false
+      if (searchQuery && !item.name.toLowerCase().includes(searchQuery.toLowerCase())) return false
+      
+      // Type Filter
+      if (filterType !== "all") {
+        if (filterType === "folder" && item.type !== "folder") return false
+        if (filterType !== "folder") {
+          if (item.type === "folder") return false
+          const mime = item.mimeType?.toLowerCase() || ""
+          if (filterType === "image" && !mime.includes("image")) return false
+          if (filterType === "pdf" && !mime.includes("pdf")) return false
+          if (filterType === "document" && !mime.includes("word") && !mime.includes("excel") && !mime.includes("spreadsheet") && !mime.includes("presentation") && !mime.includes("powerpoint")) return false
+        }
+      }
+
+      // Date Filter
+      if (filterDate !== "all" && item.rawDate) {
+        const itemDate = new Date(item.rawDate)
+        const now = new Date()
+        const diffTime = Math.abs(now.getTime() - itemDate.getTime())
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+
+        if (filterDate === "today" && diffDays > 1) return false
+        if (filterDate === "7days" && diffDays > 7) return false
+        if (filterDate === "30days" && diffDays > 30) return false
+      }
+
+      return true
+    })
+  }, [data, optimisticHiddenIds, searchQuery, filterType, filterDate])
 
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
@@ -311,7 +444,10 @@ export function FileTable({ data, onNavigate, folderId }: FileTableProps) {
     columns,
     state: {
       sorting,
+      rowSelection,
     },
+    enableRowSelection: (row) => !row.original.isRestricted,
+    onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
@@ -324,11 +460,51 @@ export function FileTable({ data, onNavigate, folderId }: FileTableProps) {
   })
 
   const { rows } = table.getRowModel()
+  const selectedRows = table.getSelectedRowModel().rows
 
   return (
-    <div className="flex flex-col rounded-3xl bg-white shadow-sm ring-1 ring-slate-100 overflow-hidden">
+    <div className="flex flex-col rounded-3xl bg-white shadow-sm ring-1 ring-slate-100 overflow-hidden relative">
+      {/* Batch Action Bar */}
+      {selectedRows.length > 0 && (
+        <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between bg-emerald-600 px-6 py-3 text-white animate-in slide-in-from-top-4">
+          <span className="font-bold text-sm">{selectedRows.length} item terpilih</span>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                const items = table.getSelectedRowModel().rows.map(r => r.original as FileItem)
+                setItemsToMove(items)
+              }}
+              className="flex items-center gap-2 rounded-lg bg-emerald-700/50 px-3 py-1.5 text-sm font-medium hover:bg-emerald-700 transition-colors mr-2"
+            >
+              <FolderIcon className="h-4 w-4" />
+              <span className="hidden sm:inline">Pindahkan</span>
+            </button>
+            <button
+              onClick={() => {
+                // Implement Batch Delete
+                alert(`Batch delete ${selectedRows.length} items (Coming Soon)`)
+              }}
+              className="flex items-center gap-2 rounded-lg bg-rose-500/50 px-3 py-1.5 text-sm font-medium hover:bg-rose-600 transition-colors"
+            >
+              <Trash2 className="h-4 w-4" />
+              <span className="hidden sm:inline">Hapus</span>
+            </button>
+            <div className="h-4 w-px bg-emerald-500 mx-1" />
+            <button
+              onClick={() => table.resetRowSelection()}
+              className="text-emerald-100 hover:text-white transition-colors text-sm font-medium ml-1"
+            >
+              Batal
+            </button>
+          </div>
+        </div>
+      )}
       {/* Table Area */}
-      <div className="w-full text-left text-sm flex flex-col">
+      <div 
+        className="w-full text-left text-sm flex flex-col min-h-[200px]"
+        onDragOver={(e) => handleDragOver(e)}
+        onDrop={(e) => handleDrop(e)}
+      >
         
         {/* Table Header */}
         <div className="hidden md:flex w-full bg-slate-50/90 backdrop-blur-md border-b border-slate-100">
@@ -364,43 +540,109 @@ export function FileTable({ data, onNavigate, folderId }: FileTableProps) {
           ))}
         </div>
 
-        {/* Table Body */}
-        <div className="w-full flex flex-col divide-y divide-slate-50">
-          {rows.map((row) => {
-            const item = row.original as FileItem
-            const isDragOver = dragOverFolderId === item.id
-            return (
-              <div
-                key={row.id}
-                draggable={!item.isRestricted}
-                onDragStart={(e) => handleDragStart(e, item)}
-                onDragOver={(e) => handleDragOver(e, item)}
-                onDragLeave={(e) => handleDragLeave(e, item)}
-                onDrop={(e) => handleDrop(e, item)}
-                className={`flex w-full items-center transition-all py-1 border-2 border-transparent ${
-                  isDragOver ? "bg-blue-50/80 border-blue-400 ring-2 ring-blue-100 rounded-lg scale-[1.01] shadow-md z-10" : "hover:bg-slate-50/50"
-                } ${draggedItem?.id === item.id ? "opacity-50" : ""}`}
-              >
-                {row.getVisibleCells().map((cell) => (
-                  <div key={cell.id} className={`px-4 lg:px-6 py-2 ${(cell.column.columnDef.meta as Record<string, string>)?.className || ""}`}>
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </div>
-                ))}
-              </div>
-            )
-          })}
+        {viewMode === "list" ? (
+          <div className="w-full flex flex-col divide-y divide-slate-50">
+            {rows.map((row) => {
+              const item = row.original as FileItem
+              const isDragOver = dragOverFolderId === item.id
+              return (
+                <div
+                  key={row.id}
+                  draggable={!item.isRestricted}
+                  onDragStart={(e) => handleDragStart(e, item)}
+                  onDragOver={(e) => handleDragOver(e, item)}
+                  onDragLeave={(e) => handleDragLeave(e, item)}
+                  onDrop={(e) => handleDrop(e, item)}
+                  onContextMenu={(e) => handleContextMenu(e, item)}
+                  className={`flex w-full items-center transition-all py-1 border-2 border-transparent ${
+                    isDragOver ? "bg-blue-50/80 border-blue-400 ring-2 ring-blue-100 rounded-lg scale-[1.01] shadow-md z-10" : "hover:bg-slate-50/50"
+                  } ${draggedItem?.id === item.id ? "opacity-50" : ""}`}
+                >
+                  {row.getVisibleCells().map((cell) => (
+                    <div key={cell.id} className={`px-4 lg:px-6 py-2 ${(cell.column.columnDef.meta as Record<string, string>)?.className || ""}`}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </div>
+                  ))}
+                </div>
+              )
+            })}
 
-          {/* Empty State */}
-          {data.length === 0 && (
-            <div className="flex flex-col items-center justify-center p-16 text-center">
-              <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-slate-50 text-slate-300 mb-4">
-                <FolderIcon className="h-10 w-10" />
+            {/* Empty State */}
+            {data.length === 0 && (
+              <div className="flex flex-col items-center justify-center p-16 text-center">
+                <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-slate-50 text-slate-300 mb-4">
+                  <FolderIcon className="h-10 w-10" />
+                </div>
+                <p className="font-bold text-slate-700">Folder ini kosong</p>
+                <p className="mt-1 text-sm font-medium text-slate-500 max-w-[250px]">Silakan unggah dokumen baru atau buat sub-folder di sini.</p>
               </div>
-              <p className="font-bold text-slate-700">Folder ini kosong</p>
-              <p className="mt-1 text-sm font-medium text-slate-500 max-w-[250px]">Silakan unggah dokumen baru atau buat sub-folder di sini.</p>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        ) : (
+          <div className="p-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 bg-slate-50/30">
+            {rows.map((row) => {
+              const item = row.original as FileItem
+              const isDragOver = dragOverFolderId === item.id
+              return (
+                <div
+                  key={row.id}
+                  draggable={!item.isRestricted}
+                  onDragStart={(e) => handleDragStart(e, item)}
+                  onDragOver={(e) => handleDragOver(e, item)}
+                  onDragLeave={(e) => handleDragLeave(e, item)}
+                  onDrop={(e) => handleDrop(e, item)}
+                  onContextMenu={(e) => handleContextMenu(e, item)}
+                  className={`group relative flex flex-col items-center p-4 rounded-2xl border-2 transition-all cursor-pointer ${
+                    isDragOver ? "bg-blue-50/80 border-blue-400 ring-2 ring-blue-100 scale-[1.02] shadow-md z-10" : 
+                    row.getIsSelected() ? "bg-emerald-50/50 border-emerald-300" : "bg-white border-slate-100 hover:border-emerald-200 hover:shadow-md hover:-translate-y-0.5"
+                  } ${draggedItem?.id === item.id ? "opacity-50" : ""}`}
+                  onClick={() => {
+                    if (item.type === "folder" && onNavigate) {
+                      onNavigate(item.id)
+                    } else if (item.type === "file" && (item.mimeType?.includes("pdf") || item.mimeType?.includes("image"))) {
+                      handlePreview(item)
+                    }
+                  }}
+                >
+                  <div className={`flex h-16 w-16 mb-3 items-center justify-center rounded-2xl transition-transform ${item.type === "folder" ? "bg-blue-50 text-blue-600" : "bg-slate-50 text-slate-500"}`}>
+                    {item.type === "folder" ? <FolderIcon className="h-8 w-8 fill-blue-500 text-blue-500" /> : getIcon(item)}
+                  </div>
+                  <div className="flex flex-col w-full text-center">
+                    <span className={`text-sm font-bold truncate px-1 ${item.type === "folder" ? "text-slate-800" : "text-slate-700"}`} title={item.name}>
+                      {item.name}
+                    </span>
+                    <span className="text-[10px] text-slate-400 mt-1 truncate">
+                      {item.type === "file" ? `${item.size || "-"} • ${item.updatedAt}` : item.updatedAt}
+                    </span>
+                  </div>
+                  
+                  {/* Grid Action Buttons overlay */}
+                  <div className={`absolute top-2 left-2 transition-opacity ${row.getIsSelected() ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
+                    <input
+                      type="checkbox"
+                      className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4 cursor-pointer"
+                      checked={row.getIsSelected()}
+                      disabled={!row.getCanSelect() || item.isRestricted}
+                      onChange={row.getToggleSelectedHandler()}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </div>
+                </div>
+              )
+            })}
+            
+            {/* Empty State Grid */}
+            {data.length === 0 && (
+              <div className="col-span-full flex flex-col items-center justify-center p-16 text-center">
+                <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-slate-50 text-slate-300 mb-4">
+                  <FolderIcon className="h-10 w-10" />
+                </div>
+                <p className="font-bold text-slate-700">Folder ini kosong</p>
+                <p className="mt-1 text-sm font-medium text-slate-500 max-w-[250px]">Silakan unggah dokumen baru atau buat sub-folder di sini.</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Pagination Controls */}
@@ -458,6 +700,85 @@ export function FileTable({ data, onNavigate, folderId }: FileTableProps) {
         initialName={itemToRename?.name || ""}
         itemType={itemToRename?.type || "file"}
       />
+
+      <MoveItemModal
+        isOpen={itemsToMove.length > 0}
+        onClose={() => setItemsToMove([])}
+        itemsToMove={itemsToMove}
+        currentFolderId={folderId || null}
+        onSuccess={() => table.resetRowSelection()}
+      />
+
+      {contextMenu.visible && contextMenu.item && (
+        <div 
+          className="fixed z-50 min-w-[200px] bg-white rounded-xl shadow-xl border border-slate-100 py-1.5 animate-in fade-in zoom-in-95"
+          style={{ top: Math.min(contextMenu.y, window.innerHeight - 250), left: Math.min(contextMenu.x, window.innerWidth - 200) }}
+        >
+          <div className="px-3 py-2 border-b border-slate-50 mb-1">
+            <p className="text-xs font-bold text-slate-800 truncate">{contextMenu.item.name}</p>
+          </div>
+          
+          {contextMenu.item.type !== "folder" && (contextMenu.item.mimeType?.includes("pdf") || contextMenu.item.mimeType?.includes("image")) && (
+            <button 
+              onClick={() => handlePreview(contextMenu.item!)}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-emerald-600"
+            >
+              <Eye className="h-4 w-4" /> Pratinjau
+            </button>
+          )}
+          
+          {!contextMenu.item.isRestricted && contextMenu.item.type !== "folder" && (
+            <button 
+              onClick={() => handleDownload(contextMenu.item!)}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-emerald-600"
+            >
+              <Download className="h-4 w-4" /> Download
+            </button>
+          )}
+
+          {!contextMenu.item.isRestricted && contextMenu.item.type !== "folder" && (
+            <button 
+              onClick={() => handleCopyLink(contextMenu.item!)}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-emerald-600"
+            >
+              <Link2 className="h-4 w-4" /> Salin Tautan
+            </button>
+          )}
+
+          {!contextMenu.item.isRestricted && (
+            <>
+              <div className="h-px w-full bg-slate-50 my-1" />
+              <button 
+                onClick={() => {
+                  if (onShowInfo) onShowInfo(contextMenu.item!)
+                  setContextMenu({ ...contextMenu, visible: false })
+                }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-emerald-600"
+              >
+                <Info className="h-4 w-4" /> Detail File
+              </button>
+              <button 
+                onClick={() => setItemToRename(contextMenu.item!)}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-emerald-600"
+              >
+                <Pencil className="h-4 w-4" /> Ganti Nama
+              </button>
+              <button 
+                onClick={() => setItemsToMove([contextMenu.item!])}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-emerald-600"
+              >
+                <FolderIcon className="h-4 w-4" /> Pindahkan
+              </button>
+              <button 
+                onClick={() => handleDeleteClick(contextMenu.item!)}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-rose-600 hover:bg-rose-50"
+              >
+                <Trash2 className="h-4 w-4" /> Hapus
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }

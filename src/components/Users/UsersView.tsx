@@ -1,11 +1,11 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Pencil, Shield, Trash2, Zap } from "lucide-react"
+import { Plus, Pencil, Shield, Trash2 } from "lucide-react"
 import { AddUserModal } from "./AddUserModal"
 import { EditUserModal } from "./EditUserModal"
 import { DeleteUserModal } from "./DeleteUserModal"
-import { migrateEmailsAndRoles, deleteUser } from "@/app/(dashboard)/users/actions"
+import { deleteUser } from "@/app/(dashboard)/users/actions"
 
 interface Bidang {
   id: string
@@ -28,24 +28,10 @@ interface UsersViewProps {
 
 export function UsersView({ initialUsers, bidangList, isSuperAdmin }: UsersViewProps) {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
-  const [isMigrating, setIsMigrating] = useState(false)
   
   const [userToEdit, setUserToEdit] = useState<User | null>(null)
   const [userToDelete, setUserToDelete] = useState<User | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
-
-  const handleMigrate = async () => {
-    if (!confirm("Update email admin menjadi @kemenag.go.id dan atur sebagai Admin Seksi Bidang?")) return
-    setIsMigrating(true)
-    const res = await migrateEmailsAndRoles()
-    if (res.success) {
-      alert("Migrasi berhasil! Cek console log jika perlu rincian.")
-      console.log(res.logs)
-    } else {
-      alert("Gagal: " + res.error)
-    }
-    setIsMigrating(false)
-  }
 
   const handleDeleteConfirm = async () => {
     if (!userToDelete) return
@@ -67,14 +53,7 @@ export function UsersView({ initialUsers, bidangList, isSuperAdmin }: UsersViewP
           
           {isSuperAdmin && (
             <div className="flex items-center gap-3">
-              <button 
-                onClick={handleMigrate}
-                disabled={isMigrating}
-                className="flex w-fit items-center gap-2 rounded-xl bg-orange-100 px-5 py-2.5 text-sm font-bold text-orange-600 shadow-sm transition-all hover:bg-orange-200 disabled:opacity-50"
-              >
-                <Zap className="h-4 w-4" />
-                {isMigrating ? "Memproses..." : "Migrasi Email Admin"}
-              </button>
+
               <button 
                 onClick={() => setIsAddModalOpen(true)}
                 className="flex w-fit items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-emerald-600/20 transition-all hover:bg-emerald-700 hover:shadow-lg hover:shadow-emerald-600/30"

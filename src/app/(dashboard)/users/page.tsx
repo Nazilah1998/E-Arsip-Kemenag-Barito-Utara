@@ -52,7 +52,8 @@ export default async function UsersManagementPage() {
   const { data: bidangList } = await supabase
     .from('bidang')
     .select('id, name')
-    .order('name')
+    .order('sort_order', { ascending: true })
+    .order('name', { ascending: true })
 
   return (
     <div className="flex flex-col gap-6 pb-10">

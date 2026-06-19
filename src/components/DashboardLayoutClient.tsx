@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { Toaster } from "sonner"
 import { Sidebar } from "@/components/Sidebar"
 import { TopNavbar } from "@/components/TopNavbar"
 
@@ -32,6 +33,15 @@ export function DashboardLayoutClient({
           </div>
         </div>
       )}
+
+      <Toaster
+        position="top-right"
+        richColors
+        closeButton
+        toastOptions={{
+          style: { borderRadius: '12px', fontWeight: 600 },
+        }}
+      />
 
       {/* Main Content Area */}
       <div className="flex flex-1 flex-col overflow-hidden">

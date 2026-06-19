@@ -103,6 +103,26 @@ export async function deleteItem(id: string, type: "folder" | "file", folderId: 
 
     const table = type === "folder" ? "folders" : "files"
     
+    // If it's a file, also remove from storage
+    if (type === "file") {
+      const { data: fileData } = await supabase
+        .from('files')
+        .select('r2_object_key')
+        .eq('id', id)
+        .single()
+
+      if (fileData?.r2_object_key) {
+        const bucketName = process.env.NEXT_PUBLIC_SUPABASE_ARSIP_BUCKET || "Files-arsip"
+        const { error: storageError } = await supabase.storage
+          .from(bucketName)
+          .remove([fileData.r2_object_key])
+
+        if (storageError) {
+          console.error("Storage delete failed (non-fatal):", storageError)
+        }
+      }
+    }
+    
     const { error } = await supabase
       .from(table)
       .update({ 
@@ -110,7 +130,6 @@ export async function deleteItem(id: string, type: "folder" | "file", folderId: 
         updated_at: new Date().toISOString()
       })
       .eq('id', id)
-      // Extra security: ensure the user has access to delete (simplified for now to just checking if it exists)
       
     if (error) throw error
 
@@ -182,6 +201,42 @@ export async function moveItem(itemId: string, itemType: "folder" | "file", targ
     return { success: true }
   } catch (error) {
     console.error(`Error moving ${itemType}:`, error)
+    return { success: false, error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
+export async function getFoldersByBidang() {
+  try {
+    const supabase = await createClient()
+    
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) throw new Error("Unauthorized")
+
+    const { data: metadata, error: metaError } = await supabase
+      .from('users_metadata')
+      .select('bidang_id, role')
+      .eq('id', user.id)
+      .single()
+
+    if (metaError || !metadata) throw new Error("Metadata user tidak ditemukan")
+
+    const query = supabase
+      .from('folders')
+      .select('id, name, parent_id')
+      .is('deleted_at', null)
+
+    // For safety, only show their bidang's folders (unless logic dictates otherwise)
+    // Actually SUPER_ADMIN might want to see all, but let's stick to what's mapped to them
+    if (metadata.bidang_id) {
+      query.eq('bidang_id', metadata.bidang_id)
+    }
+
+    const { data, error } = await query
+
+    if (error) throw error
+    return { success: true, data }
+  } catch (error) {
+    console.error(`Error fetching folders:`, error)
     return { success: false, error: error instanceof Error ? error.message : String(error) }
   }
 }

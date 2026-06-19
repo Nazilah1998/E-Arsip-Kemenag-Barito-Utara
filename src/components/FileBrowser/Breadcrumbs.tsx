@@ -4,6 +4,7 @@ import Link from "next/link"
 import { ChevronRight, Home, Loader2 } from "lucide-react"
 import { useState } from "react"
 import { moveItem } from "@/app/(dashboard)/folders/actions"
+import { toast } from "sonner"
 
 interface BreadcrumbItem {
   id: string
@@ -50,9 +51,10 @@ export function Breadcrumbs({ items, currentFolderId }: BreadcrumbsProps) {
       const result = await moveItem(data.id, data.type, targetId, currentFolderId)
       if (!result.success) throw new Error(result.error)
       
+      toast.success("Item berhasil dipindahkan.")
     } catch (error) {
       console.error("Move to breadcrumb failed:", error)
-      alert("Gagal memindahkan item.")
+      toast.error("Gagal memindahkan item.")
     } finally {
       setIsMoving(false)
     }

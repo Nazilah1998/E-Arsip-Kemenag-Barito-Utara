@@ -3,6 +3,9 @@ import { FolderOpen } from "lucide-react"
 import { FileBrowserView } from "@/components/FileBrowser/FileBrowserView"
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
+import { formatFileSize } from "@/lib/utils"
+import { format } from "date-fns"
+import { id } from "date-fns/locale"
 
 export default async function FolderPage({ params }: { params: Promise<{ folderId: string }> | { folderId: string } }) {
   // In Next.js 15, params is a Promise
@@ -35,30 +38,82 @@ export default async function FolderPage({ params }: { params: Promise<{ folderI
   }
   const { data: files = [] } = await filesQuery.order('created_at', { ascending: false })
 
-  // Format data for FileTable
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes'
-    const k = 1024
-    const sizes = ['Bytes', 'KB', 'MB', 'GB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+  const formatDate = (dateStr: string) => {
+    return format(new Date(dateStr), "d MMM yyyy", { locale: id })
   }
 
+  // Fetch all folders and files for size calculation and breadcrumbs (lightweight fetch)
+  const { data: allFoldersData } = await supabase.from('folders').select('id, parent_id, name').is('deleted_at', null)
+  const { data: allFilesData } = await supabase.from('files').select('folder_id, size_bytes').is('deleted_at', null)
+
+  const buildSizeMap = () => {
+    const sizeMap: Record<string, number> = {}
+    const childrenMap: Record<string, string[]> = {}
+    
+    // Initialize
+    allFoldersData?.forEach(f => {
+      sizeMap[f.id] = 0
+      childrenMap[f.id] = []
+    })
+    
+    // Build tree
+    allFoldersData?.forEach(f => {
+      if (f.parent_id && childrenMap[f.parent_id]) {
+        childrenMap[f.parent_id].push(f.id)
+      }
+    })
+    
+    // Add file sizes directly to their folders
+    allFilesData?.forEach(file => {
+      if (file.folder_id && sizeMap[file.folder_id] !== undefined) {
+        sizeMap[file.folder_id] += (file.size_bytes || 0)
+      }
+    })
+    
+    // Compute total sizes bottom-up
+    const computed = new Set<string>()
+    const computeFolder = (fId: string): number => {
+      if (computed.has(fId)) return sizeMap[fId]
+      
+      let total = sizeMap[fId]
+      const children = childrenMap[fId] || []
+      for (const childId of children) {
+        total += computeFolder(childId)
+      }
+      
+      sizeMap[fId] = total
+      computed.add(fId)
+      return total
+    }
+    
+    allFoldersData?.forEach(f => computeFolder(f.id))
+    
+    return sizeMap
+  }
+
+  const folderSizeMap = buildSizeMap()
+
   const items = [
-    ...(folders || []).map(f => ({
-      id: f.id,
-      name: f.name,
-      type: "folder" as const,
-      updatedAt: new Date(f.updated_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }),
-      isRestricted: f.is_restricted || false
-    })),
+    ...(folders || []).map(f => {
+      const folderSize = folderSizeMap[f.id] || 0
+      return {
+        id: f.id,
+        name: f.name,
+        type: "folder" as const,
+        size: folderSize > 0 ? formatFileSize(folderSize) : "-",
+        updatedAt: formatDate(f.updated_at),
+        rawDate: f.updated_at,
+        isRestricted: f.is_restricted || false
+      }
+    }),
     ...(files || []).map(f => ({
       id: f.id,
       name: f.name,
       type: "file" as const,
       mimeType: f.mime_type,
       size: formatFileSize(f.size_bytes),
-      updatedAt: new Date(f.updated_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }),
+      updatedAt: formatDate(f.updated_at),
+      rawDate: f.updated_at,
       isRestricted: f.is_restricted || false,
       objectKey: f.r2_object_key
     }))
@@ -70,10 +125,22 @@ export default async function FolderPage({ params }: { params: Promise<{ folderI
   ]
   
   if (folderId !== 'root') {
-    const { data: currentFolder } = await supabase.from('folders').select('name').eq('id', folderId).single()
-    if (currentFolder) {
-      breadcrumbs.push({ id: folderId, name: currentFolder.name })
+    const buildBreadcrumbs = (currentId: string) => {
+      const paths = []
+      let curr = allFoldersData?.find(f => f.id === currentId)
+      while (curr) {
+        paths.unshift({ id: curr.id, name: curr.name })
+        const parentId = curr.parent_id
+        if (parentId) {
+          curr = allFoldersData?.find(f => f.id === parentId)
+        } else {
+          break
+        }
+      }
+      return paths
     }
+    
+    breadcrumbs.push(...buildBreadcrumbs(folderId))
   }
 
   return (

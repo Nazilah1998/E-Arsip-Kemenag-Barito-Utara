@@ -1,15 +1,19 @@
 "use client"
 
-import { useState, useRef } from "react"
-import { Upload, X, FileUp, AlertCircle, CheckCircle2, Loader2, Trash2 } from "lucide-react"
+import { useState, useRef, useEffect } from "react"
+import { Upload, X, FileUp, AlertCircle, CheckCircle2, Loader2, Trash2, FolderUp } from "lucide-react"
 import { saveFileMetadata } from "@/app/(dashboard)/folders/actions"
 import { createClient } from "@/lib/supabase/client"
+import { formatFileSize } from "@/lib/utils"
+import { toast } from "sonner"
 
 interface UploadFileModalProps {
   isOpen: boolean
   onClose: () => void
   folderId: string
   userBidangId: string
+  initialFiles?: File[]
+  isFolderMode?: boolean
 }
 
 type FileStatus = 'pending' | 'uploading' | 'success' | 'error'
@@ -22,7 +26,7 @@ interface UploadItem {
   error?: string
 }
 
-export function UploadFileModal({ isOpen, onClose, folderId, userBidangId }: UploadFileModalProps) {
+export function UploadFileModal({ isOpen, onClose, folderId, userBidangId, initialFiles, isFolderMode = false }: UploadFileModalProps) {
   const [uploadItems, setUploadItems] = useState<UploadItem[]>([])
   const [isUploading, setIsUploading] = useState(false)
   const [globalError, setGlobalError] = useState("")
@@ -32,7 +36,16 @@ export function UploadFileModal({ isOpen, onClose, folderId, userBidangId }: Upl
   const supabase = createClient()
   const bucketName = process.env.NEXT_PUBLIC_SUPABASE_ARSIP_BUCKET || "Files-arsip"
 
-  if (!isOpen) return null
+  useEffect(() => {
+    if (!isOpen) {
+      const timer = setTimeout(() => {
+        setUploadItems([])
+        setIsUploading(false)
+        setGlobalError("")
+      }, 0)
+      return () => clearTimeout(timer)
+    }
+  }, [isOpen])
 
   // Helper to add files to state
   const addFiles = (newFiles: File[]) => {
@@ -52,6 +65,16 @@ export function UploadFileModal({ isOpen, onClose, folderId, userBidangId }: Upl
 
     setUploadItems(prev => [...prev, ...items])
   }
+
+  useEffect(() => {
+    if (isOpen && initialFiles && initialFiles.length > 0 && uploadItems.length === 0) {
+      const timer = setTimeout(() => addFiles(initialFiles), 0)
+      return () => clearTimeout(timer)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, initialFiles])
+
+  if (!isOpen) return null
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -148,6 +171,7 @@ export function UploadFileModal({ isOpen, onClose, folderId, userBidangId }: Upl
 
     setIsUploading(true)
     setGlobalError("")
+    let successCount = 0
 
     // Upload sequentially to avoid overloading DB/Storage
     for (const item of pendingItems) {
@@ -182,6 +206,7 @@ export function UploadFileModal({ isOpen, onClose, folderId, userBidangId }: Upl
 
         if (!result.success) throw new Error(result.error || "Database error")
 
+        successCount++
         updateItemStatus(item.id, { status: 'success', progress: 100 })
       } catch (err) {
         updateItemStatus(item.id, { 
@@ -193,14 +218,10 @@ export function UploadFileModal({ isOpen, onClose, folderId, userBidangId }: Upl
     }
 
     setIsUploading(false)
-  }
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes'
-    const k = 1024
-    const sizes = ['Bytes', 'KB', 'MB', 'GB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+    if (successCount > 0) {
+      toast.success(`${successCount} file berhasil diunggah.`)
+    }
   }
 
   const allSuccess = uploadItems.length > 0 && uploadItems.every(i => i.status === 'success')
@@ -249,13 +270,39 @@ export function UploadFileModal({ isOpen, onClose, folderId, userBidangId }: Upl
             </div>
             <p className="text-sm font-semibold text-slate-700">Klik atau seret file / folder ke sini</p>
             <p className="mt-1 text-xs text-slate-500">Dukung drag-and-drop 1 folder penuh sekaligus</p>
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              onChange={handleFileChange} 
-              className="hidden" 
-              multiple 
-            />
+            {isFolderMode ? (
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                className="hidden"
+                multiple
+                // @ts-expect-error - React doesn't fully support these attributes yet
+                webkitdirectory=""
+                directory=""
+              />
+            ) : (
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                className="hidden"
+                multiple
+              />
+            )}
+            
+            <div className="flex justify-center mb-4">
+              <div className={`p-4 rounded-full ${isDragging ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
+                {isFolderMode ? <FolderUp className="h-8 w-8" /> : <FileUp className="h-8 w-8" />}
+              </div>
+            </div>
+            
+            <h3 className="text-lg font-bold text-slate-800 mb-1">
+              {isFolderMode ? 'Pilih Folder untuk Diunggah' : 'Pilih File atau Tarik ke Sini'}
+            </h3>
+            <p className="text-sm text-slate-500 mb-6">
+              {isFolderMode ? 'Seluruh file dalam folder akan diunggah (Maksimal 50 file sekaligus)' : 'Maksimal 50 file sekaligus. Tarik dan lepas untuk menambahkan.'}
+            </p>
           </div>
 
           {globalError && (
