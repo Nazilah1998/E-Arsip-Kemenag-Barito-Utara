@@ -47,7 +47,7 @@ export function DashboardLayoutClient({
       <div className="flex flex-1 flex-col overflow-hidden">
         <TopNavbar onMenuClick={() => setMobileMenuOpen(true)} />
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 lg:p-8">
           {/* Dihapus max-w-7xl agar full width */}
           <div className="mx-auto w-full">
             {children}

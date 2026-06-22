@@ -1,14 +1,16 @@
 "use client"
 
-import { AlertTriangle, Loader2 } from "lucide-react"
+import { Loader2, Trash2, Files } from "lucide-react"
 
 interface DeleteConfirmModalProps {
   isOpen: boolean
   onClose: () => void
   onConfirm: () => void
-  itemName: string
-  itemType: "folder" | "file"
+  itemName?: string
+  itemType?: "folder" | "file"
+  itemCount?: number
   isDeleting: boolean
+  isPermanent?: boolean
 }
 
 export function DeleteConfirmModal({
@@ -17,7 +19,9 @@ export function DeleteConfirmModal({
   onConfirm,
   itemName,
   itemType,
-  isDeleting
+  itemCount = 1,
+  isDeleting,
+  isPermanent = false
 }: DeleteConfirmModalProps) {
   if (!isOpen) return null
 
@@ -27,16 +31,26 @@ export function DeleteConfirmModal({
         
         <div className="flex flex-col items-center text-center">
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-rose-100 text-rose-600 mb-6 ring-8 ring-rose-50">
-            <AlertTriangle className="h-8 w-8" />
+            {itemCount > 1 ? <Files className="h-8 w-8" /> : <Trash2 className="h-8 w-8" />}
           </div>
           
           <h2 className="text-xl font-bold text-slate-800">
-            Hapus {itemType === "folder" ? "Folder" : "Dokumen"}?
+            {itemCount > 1 
+              ? `Hapus ${itemCount} Item?` 
+              : `Hapus ${itemType === "folder" ? "Folder" : "Dokumen"}?`}
           </h2>
           
           <p className="mt-3 text-sm text-slate-500 leading-relaxed">
-            Anda yakin ingin menghapus <strong className="text-slate-700">&quot;{itemName}&quot;</strong>? 
-            File ini akan dipindahkan ke Trash (Tempat Sampah) dan tidak akan hilang permanen sebelum Anda mengosongkan Trash.
+            {itemCount > 1 ? (
+              <>Anda yakin ingin menghapus <strong className="text-slate-700">{itemCount} item yang dipilih</strong>?</>
+            ) : (
+              <>Anda yakin ingin menghapus <strong className="text-slate-700">&quot;{itemName}&quot;</strong>?</>
+            )}{" "}
+            {isPermanent ? (
+              <span className="text-rose-600 font-medium">Tindakan ini permanen dan data tidak dapat dikembalikan.</span>
+            ) : (
+              <span>File ini akan dipindahkan ke Trash (Tempat Sampah) dan tidak akan hilang permanen sebelum Anda mengosongkan Trash.</span>
+            )}
           </p>
         </div>
 

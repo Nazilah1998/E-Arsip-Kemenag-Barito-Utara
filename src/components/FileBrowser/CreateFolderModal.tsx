@@ -40,7 +40,7 @@ export function CreateFolderModal({ isOpen, onClose, parentId }: CreateFolderMod
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
       <div className="w-full max-w-md animate-in zoom-in-95 rounded-3xl bg-white shadow-2xl ring-1 ring-slate-200">
-        <div className="flex items-center justify-between border-b border-slate-100 p-6">
+        <div className="flex items-center justify-between border-b border-slate-100 p-4 sm:p-6">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
               <FolderPlus className="h-5 w-5" />
@@ -55,7 +55,7 @@ export function CreateFolderModal({ isOpen, onClose, parentId }: CreateFolderMod
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6">
           <div className="space-y-4">
             <div>
               <label htmlFor="folderName" className="block text-sm font-semibold text-slate-700 mb-2">

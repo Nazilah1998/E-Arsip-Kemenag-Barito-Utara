@@ -2,6 +2,9 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
+import { getR2Client, R2_BUCKET_NAME } from "@/lib/r2"
+import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3"
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 
 export async function createFolder(name: string, parentId: string | null) {
   try {
@@ -94,6 +97,48 @@ export async function saveFileMetadata({
   }
 }
 
+export async function getPresignedUploadUrl(filePath: string, fileType: string) {
+  try {
+    const supabase = await createClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) throw new Error("Unauthorized")
+
+    const client = getR2Client()
+    const command = new PutObjectCommand({
+      Bucket: R2_BUCKET_NAME,
+      Key: filePath,
+      ContentType: fileType,
+    })
+
+    const presignedUrl = await getSignedUrl(client, command, { expiresIn: 3600 })
+    return { success: true, presignedUrl, r2ObjectKey: filePath }
+  } catch (error) {
+    console.error("Error generating upload presigned URL:", error)
+    return { success: false, error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
+export async function getPresignedDownloadUrl(r2ObjectKey: string, downloadName?: string) {
+  try {
+    const supabase = await createClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) throw new Error("Unauthorized")
+
+    const client = getR2Client()
+    const command = new GetObjectCommand({
+      Bucket: R2_BUCKET_NAME,
+      Key: r2ObjectKey,
+      ResponseContentDisposition: downloadName ? `attachment; filename="${downloadName}"` : "inline",
+    })
+
+    const presignedUrl = await getSignedUrl(client, command, { expiresIn: 3600 })
+    return { success: true, presignedUrl }
+  } catch (error) {
+    console.error("Error generating download presigned URL:", error)
+    return { success: false, error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
 export async function deleteItem(id: string, type: "folder" | "file", folderId: string | null) {
   try {
     const supabase = await createClient()
@@ -112,12 +157,14 @@ export async function deleteItem(id: string, type: "folder" | "file", folderId: 
         .single()
 
       if (fileData?.r2_object_key) {
-        const bucketName = process.env.NEXT_PUBLIC_SUPABASE_ARSIP_BUCKET || "Files-arsip"
-        const { error: storageError } = await supabase.storage
-          .from(bucketName)
-          .remove([fileData.r2_object_key])
-
-        if (storageError) {
+        try {
+          const client = getR2Client()
+          const command = new DeleteObjectCommand({
+            Bucket: R2_BUCKET_NAME,
+            Key: fileData.r2_object_key,
+          })
+          await client.send(command)
+        } catch (storageError) {
           console.error("Storage delete failed (non-fatal):", storageError)
         }
       }
@@ -137,6 +184,58 @@ export async function deleteItem(id: string, type: "folder" | "file", folderId: 
     return { success: true }
   } catch (error) {
     console.error(`Error deleting ${type}:`, error)
+    return { success: false, error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
+export async function deleteItemsBatch(items: { id: string, type: "folder" | "file" }[], folderId: string | null) {
+  try {
+    const supabase = await createClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) throw new Error("Unauthorized")
+
+    const fileIds = items.filter(i => i.type === "file").map(i => i.id)
+    const folderIds = items.filter(i => i.type === "folder").map(i => i.id)
+
+    if (fileIds.length > 0) {
+      const { data: filesData } = await supabase
+        .from('files')
+        .select('r2_object_key')
+        .in('id', fileIds)
+
+      if (filesData && filesData.length > 0) {
+        const client = getR2Client()
+        await Promise.allSettled(
+          filesData
+            .filter(f => f.r2_object_key)
+            .map(f => client.send(new DeleteObjectCommand({
+              Bucket: R2_BUCKET_NAME,
+              Key: f.r2_object_key!
+            })))
+        )
+      }
+      
+      const { error: fileErr } = await supabase
+        .from('files')
+        .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .in('id', fileIds)
+        
+      if (fileErr) throw fileErr
+    }
+
+    if (folderIds.length > 0) {
+      const { error: folderErr } = await supabase
+        .from('folders')
+        .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .in('id', folderIds)
+        
+      if (folderErr) throw folderErr
+    }
+
+    revalidatePath(`/folders/${folderId || 'root'}`)
+    return { success: true }
+  } catch (error) {
+    console.error(`Error deleting batch items:`, error)
     return { success: false, error: error instanceof Error ? error.message : String(error) }
   }
 }

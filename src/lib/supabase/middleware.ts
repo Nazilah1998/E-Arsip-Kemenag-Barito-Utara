@@ -18,13 +18,18 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
+          const isSessionOnly = request.cookies.get('session_only')?.value === 'true'
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           supabaseResponse = NextResponse.next({
             request,
           })
-          cookiesToSet.forEach(({ name, value, options }) =>
+          cookiesToSet.forEach(({ name, value, options }) => {
+            if (isSessionOnly) {
+              delete options.maxAge
+              delete options.expires
+            }
             supabaseResponse.cookies.set(name, value, options)
-          )
+          })
         },
       },
     }

@@ -8,8 +8,9 @@ const jakartaSans = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "E-Arsip | Kemenag Barito Utara",
-  description: "Sistem Pengarsipan Digital Kementerian Agama Kabupaten Barito Utara",
+  title: "E-Arsip Betang | Kemenag Barito Utara",
+  description:
+    "Sistem Pengarsipan Digital Kementerian Agama Kabupaten Barito Utara",
 };
 
 export default function RootLayout({

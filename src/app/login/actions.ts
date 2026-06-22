@@ -2,11 +2,13 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
 
 export async function loginAction(prevState: { error: string | null } | null, formData: FormData) {
   const email = formData.get('email') as string
   const password = formData.get('password') as string
   const turnstileToken = formData.get('cf-turnstile-response') as string
+  const rememberMe = formData.get('rememberMe') === 'true'
 
   // Validasi input dasar
   if (!email || !password) {
@@ -51,6 +53,13 @@ export async function loginAction(prevState: { error: string | null } | null, fo
 
   if (error) {
     return { error: 'Email atau password yang Anda masukkan salah.' }
+  }
+
+  const cookieStore = await cookies()
+  if (!rememberMe) {
+    cookieStore.set('session_only', 'true', { path: '/' })
+  } else {
+    cookieStore.delete('session_only')
   }
 
   // Jika sukses, redirect ke dashboard

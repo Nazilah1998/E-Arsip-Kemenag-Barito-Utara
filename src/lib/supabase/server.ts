@@ -17,9 +17,14 @@ export async function createClient() {
         },
         setAll(cookiesToSet) {
           try {
-            cookiesToSet.forEach(({ name, value, options }) =>
+            const isSessionOnly = cookieStore.get('session_only')?.value === 'true'
+            cookiesToSet.forEach(({ name, value, options }) => {
+              if (isSessionOnly) {
+                delete options.maxAge
+                delete options.expires
+              }
               cookieStore.set(name, value, options)
-            )
+            })
           } catch {
             // The `setAll` method was called from a Server Component.
             // This can be ignored if you have middleware refreshing

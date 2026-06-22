@@ -25,7 +25,7 @@ export function BidangView({ bidangData }: BidangViewProps) {
   return (
     <>
       <div className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-100">
-        <div className="flex items-center justify-between border-b border-slate-100 px-8 py-6">
+        <div className="flex items-center justify-between border-b border-slate-100 px-4 md:px-8 py-6">
           <div className="flex items-center gap-3">
             <h3 className="text-lg font-bold text-slate-900">Daftar Bidang</h3>
           </div>
@@ -42,10 +42,10 @@ export function BidangView({ bidangData }: BidangViewProps) {
           <table className="w-full text-left text-sm border-collapse">
             <thead className="bg-slate-50/90 text-xs font-bold tracking-wider text-slate-500 uppercase">
               <tr>
-                <th className="border-b border-slate-100 px-8 py-4 w-10">No.</th>
-                <th className="border-b border-slate-100 px-4 py-4">Nama Bidang</th>
-                <th className="border-b border-slate-100 px-8 py-4">Total Dokumen</th>
-                <th className="border-b border-slate-100 px-8 py-4 text-right">Aksi</th>
+                <th className="border-b border-slate-100 px-3 md:px-8 py-4 w-10 hidden md:table-cell">No.</th>
+                <th className="border-b border-slate-100 px-3 md:px-8 py-4">Nama Bidang</th>
+                <th className="border-b border-slate-100 px-3 md:px-8 py-4 hidden sm:table-cell">Total Dokumen</th>
+                <th className="border-b border-slate-100 px-3 md:px-8 py-4 text-right">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -62,10 +62,10 @@ export function BidangView({ bidangData }: BidangViewProps) {
                       key={b.id} 
                       className="group transition-colors hover:bg-slate-50/80 bg-white"
                     >
-                      <td className="px-8 py-4 font-semibold text-slate-500 border-b border-slate-50">
+                      <td className="px-3 md:px-8 py-4 font-semibold text-slate-500 border-b border-slate-50 hidden md:table-cell">
                         {b.sort_order}
                       </td>
-                      <td className="px-4 py-4 font-bold text-slate-700 border-b border-slate-50">
+                      <td className="px-3 md:px-8 py-4 font-bold text-slate-700 border-b border-slate-50">
                         <div className="flex items-center gap-3">
                           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
                             <Building2 className="h-5 w-5" />
@@ -73,12 +73,12 @@ export function BidangView({ bidangData }: BidangViewProps) {
                           {b.name}
                         </div>
                       </td>
-                      <td className="px-8 py-4 text-sm font-medium text-slate-500 border-b border-slate-50">
+                      <td className="px-3 md:px-8 py-4 text-sm font-medium text-slate-500 border-b border-slate-50 hidden sm:table-cell">
                         <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
                           {b.count} dokumen
                         </span>
                       </td>
-                      <td className="px-8 py-4 border-b border-slate-50">
+                      <td className="px-3 md:px-8 py-4 border-b border-slate-50">
                       {/* Tombol aksi langsung ditampilkan tanpa opacity-0 hover:opacity-100 */}
                       <div className="flex justify-end gap-2">
                         <button 

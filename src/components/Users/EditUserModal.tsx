@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { X, UserCheck, Loader2, Eye, EyeOff } from "lucide-react"
 import { updateUser } from "@/app/(dashboard)/users/actions"
+import { ModernSelect } from "@/components/ui/ModernSelect"
 
 interface Bidang {
   id: string
@@ -76,7 +77,7 @@ export function EditUserModal({ isOpen, onClose, bidangList, user }: EditUserMod
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in">
-      <div className="w-full max-w-md animate-in zoom-in-95 rounded-3xl bg-white shadow-2xl ring-1 ring-slate-200 overflow-hidden">
+      <div className="w-full max-w-md animate-in zoom-in-95 rounded-3xl bg-white shadow-2xl ring-1 ring-slate-200">
         <div className="flex items-center justify-between border-b border-slate-100 p-6">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
@@ -132,17 +133,16 @@ export function EditUserModal({ isOpen, onClose, bidangList, user }: EditUserMod
               <label htmlFor="role" className="block text-sm font-semibold text-slate-700 mb-2">
                 Hak Akses (Role)
               </label>
-              <select
-                id="role"
+              <ModernSelect
                 name="role"
+                id="role"
                 value={role}
-                onChange={(e) => setRole(e.target.value)}
-                className="w-full rounded-xl border-0 bg-slate-50 px-4 py-3 text-sm text-slate-900 ring-1 ring-inset ring-slate-200 focus:bg-white focus:ring-2 focus:ring-inset focus:ring-blue-500 transition-all cursor-pointer"
-                required
-              >
-                <option value="Admin Bidang">Admin Bidang (Hanya akses bidangnya)</option>
-                <option value="Super Admin">Super Admin (Akses penuh)</option>
-              </select>
+                onChange={(val) => setRole(val)}
+                options={[
+                  { value: 'Admin Bidang', label: 'Admin Bidang (Hanya akses bidangnya)' },
+                  { value: 'Super Admin', label: 'Super Admin (Akses penuh)' }
+                ]}
+              />
             </div>
 
             {/* Bidang/Seksi Selection - Only show if Admin Bidang */}
@@ -151,19 +151,15 @@ export function EditUserModal({ isOpen, onClose, bidangList, user }: EditUserMod
                 <label htmlFor="bidangId" className="block text-sm font-semibold text-slate-700 mb-2">
                   Pilih Seksi / Bidang
                 </label>
-                <select
-                  id="bidangId"
+                <ModernSelect
                   name="bidangId"
+                  id="bidangId"
                   value={bidangId}
-                  onChange={(e) => setBidangId(e.target.value)}
-                  className="w-full rounded-xl border-0 bg-slate-50 px-4 py-3 text-sm text-slate-900 ring-1 ring-inset ring-slate-200 focus:bg-white focus:ring-2 focus:ring-inset focus:ring-blue-500 transition-all cursor-pointer"
+                  onChange={(val) => setBidangId(val)}
+                  placeholder="-- Pilih Bidang --"
                   required={role === "Admin Bidang"}
-                >
-                  <option value="">-- Pilih Bidang --</option>
-                  {bidangList.map(b => (
-                    <option key={b.id} value={b.id}>{b.name}</option>
-                  ))}
-                </select>
+                  options={bidangList.map(b => ({ value: b.id, label: b.name }))}
+                />
               </div>
             )}
 

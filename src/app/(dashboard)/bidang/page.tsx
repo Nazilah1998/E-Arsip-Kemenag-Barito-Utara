@@ -6,38 +6,30 @@ import { BidangView } from "@/components/Bidang/BidangView"
 export default async function BidangManagementPage() {
   const supabase = await createClient()
 
-  // Try to fetch with count relation if foreign key exists
+  // Fetch all active files to count them per bidang accurately
   let bidangData: { id: string; name: string; count: number; sort_order: number }[] = []
   
-  const { data, error } = await supabase
+  const { data: bidangRaw, error: bidangErr } = await supabase
     .from('bidang')
-    .select('id, name, sort_order, files(count)')
+    .select('id, name, sort_order')
     .order('sort_order', { ascending: true })
     .order('name', { ascending: true })
 
-  if (!error && data) {
-    bidangData = data.map(b => ({
-      id: b.id,
-      name: b.name,
-      sort_order: b.sort_order || 0,
-      count: b.files?.[0]?.count || 0
-    }))
-  } else {
-    // Fallback if no foreign key is explicitly defined in PostgREST
-    const { data: bidangRaw } = await supabase.from('bidang').select('id, name, sort_order').order('sort_order', { ascending: true }).order('name', { ascending: true })
-    const { data: filesData } = await supabase.from('files').select('bidang_id').is('deleted_at', null)
-    
-    if (bidangRaw) {
-      bidangData = bidangRaw.map(b => {
-        const count = filesData?.filter(f => f.bidang_id === b.id).length || 0
-        return {
-          id: b.id,
-          name: b.name,
-          sort_order: b.sort_order || 0,
-          count
-        }
-      })
-    }
+  if (bidangRaw && !bidangErr) {
+    const { data: filesData } = await supabase
+      .from('files')
+      .select('bidang_id')
+      .is('deleted_at', null)
+
+    bidangData = bidangRaw.map(b => {
+      const count = filesData?.filter(f => f.bidang_id === b.id).length || 0
+      return {
+        id: b.id,
+        name: b.name,
+        sort_order: b.sort_order || 0,
+        count
+      }
+    })
   }
 
   return (

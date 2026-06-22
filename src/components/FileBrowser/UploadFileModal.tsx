@@ -2,8 +2,8 @@
 
 import { useState, useRef, useEffect } from "react"
 import { Upload, X, FileUp, AlertCircle, CheckCircle2, Loader2, Trash2, FolderUp } from "lucide-react"
-import { saveFileMetadata } from "@/app/(dashboard)/folders/actions"
-import { createClient } from "@/lib/supabase/client"
+import { saveFileMetadata, getPresignedUploadUrl } from "@/app/(dashboard)/folders/actions"
+
 import { formatFileSize } from "@/lib/utils"
 import { toast } from "sonner"
 
@@ -33,8 +33,6 @@ export function UploadFileModal({ isOpen, onClose, folderId, userBidangId, initi
   const [isDragging, setIsDragging] = useState(false)
   
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const supabase = createClient()
-  const bucketName = process.env.NEXT_PUBLIC_SUPABASE_ARSIP_BUCKET || "Files-arsip"
 
   useEffect(() => {
     if (!isOpen) {
@@ -179,27 +177,38 @@ export function UploadFileModal({ isOpen, onClose, folderId, userBidangId, initi
 
       try {
         const fileExt = item.file.name.split('.').pop()
-        const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`
+        const originalName = item.file.name.substring(0, item.file.name.lastIndexOf('.')) || item.file.name
+        const safeName = originalName.replace(/[^a-zA-Z0-9-]/g, '_').substring(0, 40)
+        
+        const fileName = `${safeName}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`
         const folderPathSegment = folderId === 'root' ? 'root' : folderId
-        const filePath = `${userBidangId}/${folderPathSegment}/${fileName}`
+        const filePath = `arsip/${userBidangId}/${folderPathSegment}/${fileName}`
+
+        const { success, presignedUrl, r2ObjectKey, error: presignedError } = await getPresignedUploadUrl(filePath, item.file.type || "application/octet-stream")
+        if (!success || !presignedUrl || !r2ObjectKey) {
+          throw new Error(presignedError || "Gagal mendapatkan URL upload")
+        }
 
         updateItemStatus(item.id, { progress: 30 })
         
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from(bucketName)
-          .upload(filePath, item.file, {
-            cacheControl: '3600',
-            upsert: false
-          })
+        const uploadResponse = await fetch(presignedUrl, {
+          method: 'PUT',
+          body: item.file,
+          headers: {
+            'Content-Type': item.file.type || "application/octet-stream"
+          }
+        })
 
-        if (uploadError) throw new Error(uploadError.message)
+        if (!uploadResponse.ok) {
+          throw new Error("Gagal mengunggah file ke penyimpanan")
+        }
         
         updateItemStatus(item.id, { progress: 70 })
 
         const result = await saveFileMetadata({
           name: item.file.name,
           folderId: folderId,
-          r2ObjectKey: uploadData.path,
+          r2ObjectKey: r2ObjectKey,
           mimeType: item.file.type || "application/octet-stream",
           sizeBytes: item.file.size
         })
@@ -221,6 +230,7 @@ export function UploadFileModal({ isOpen, onClose, folderId, userBidangId, initi
 
     if (successCount > 0) {
       toast.success(`${successCount} file berhasil diunggah.`)
+      window.dispatchEvent(new CustomEvent('storage-updated'))
     }
   }
 
@@ -232,7 +242,7 @@ export function UploadFileModal({ isOpen, onClose, folderId, userBidangId, initi
       <div className="w-full max-w-2xl animate-in zoom-in-95 rounded-3xl bg-white shadow-2xl ring-1 ring-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
         
         {/* Header */}
-        <div className="flex flex-shrink-0 items-center justify-between border-b border-slate-100 p-6">
+        <div className="flex flex-shrink-0 items-center justify-between border-b border-slate-100 p-4 sm:p-6">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
               <Upload className="h-5 w-5" />
@@ -252,7 +262,7 @@ export function UploadFileModal({ isOpen, onClose, folderId, userBidangId, initi
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
+        <div className="p-4 sm:p-6 overflow-y-auto custom-scrollbar flex-1">
           
           {/* Dropzone */}
           <div 
@@ -260,16 +270,22 @@ export function UploadFileModal({ isOpen, onClose, folderId, userBidangId, initi
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
             onClick={() => !isUploading && fileInputRef.current?.click()}
-            className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed transition-all p-8 text-center
+            className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed transition-all p-6 sm:p-8 text-center
               ${isDragging ? 'border-emerald-500 bg-emerald-50 scale-[0.98]' : 'border-slate-200 bg-slate-50 hover:border-emerald-400 hover:bg-emerald-50/50'}
               ${isUploading ? 'pointer-events-none opacity-50' : ''}
             `}
           >
-            <div className={`mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-slate-100 transition-transform ${isDragging ? 'scale-110' : ''}`}>
-              <FileUp className={`h-6 w-6 ${isDragging ? 'text-emerald-600' : 'text-emerald-500'}`} />
+            <div className={`mb-3 sm:mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-slate-100 transition-transform ${isDragging ? 'scale-110' : ''}`}>
+              {isFolderMode ? <FolderUp className={`h-6 w-6 ${isDragging ? 'text-emerald-600' : 'text-emerald-500'}`} /> : <FileUp className={`h-6 w-6 ${isDragging ? 'text-emerald-600' : 'text-emerald-500'}`} />}
             </div>
-            <p className="text-sm font-semibold text-slate-700">Klik atau seret file / folder ke sini</p>
-            <p className="mt-1 text-xs text-slate-500">Dukung drag-and-drop 1 folder penuh sekaligus</p>
+            
+            <h3 className="text-base sm:text-lg font-bold text-slate-800 mb-1">
+              {isFolderMode ? 'Pilih Folder untuk Diunggah' : 'Pilih File atau Tarik ke Sini'}
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-500 max-w-[280px]">
+              {isFolderMode ? 'Semua file dalam folder akan diunggah (Maksimal 50 file)' : 'Maksimal 50 file sekaligus. Dukung drag-and-drop.'}
+            </p>
+
             {isFolderMode ? (
               <input
                 type="file"
@@ -290,19 +306,6 @@ export function UploadFileModal({ isOpen, onClose, folderId, userBidangId, initi
                 multiple
               />
             )}
-            
-            <div className="flex justify-center mb-4">
-              <div className={`p-4 rounded-full ${isDragging ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
-                {isFolderMode ? <FolderUp className="h-8 w-8" /> : <FileUp className="h-8 w-8" />}
-              </div>
-            </div>
-            
-            <h3 className="text-lg font-bold text-slate-800 mb-1">
-              {isFolderMode ? 'Pilih Folder untuk Diunggah' : 'Pilih File atau Tarik ke Sini'}
-            </h3>
-            <p className="text-sm text-slate-500 mb-6">
-              {isFolderMode ? 'Seluruh file dalam folder akan diunggah (Maksimal 50 file sekaligus)' : 'Maksimal 50 file sekaligus. Tarik dan lepas untuk menambahkan.'}
-            </p>
           </div>
 
           {globalError && (
@@ -374,7 +377,7 @@ export function UploadFileModal({ isOpen, onClose, folderId, userBidangId, initi
         </div>
 
         {/* Footer */}
-        <div className="flex-shrink-0 border-t border-slate-100 p-6 flex items-center justify-end gap-3 bg-slate-50/50">
+        <div className="flex-shrink-0 border-t border-slate-100 p-4 sm:p-6 flex items-center justify-end gap-3 bg-slate-50/50">
           <button
             type="button"
             onClick={onClose}

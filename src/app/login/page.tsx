@@ -40,14 +40,19 @@ export default function LoginPage() {
           </div>
           <div className="flex items-center gap-2">
             <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            <span className="text-xs font-bold tracking-[0.2em] text-emerald-600">
-              PORTAL INTERNAL
+            <span className="text-[10px] min-[400px]:text-[11px] sm:text-xs font-bold tracking-widest sm:tracking-[0.2em] text-emerald-600 uppercase text-center leading-tight">
+              Kementerian Agama Kabupaten Barito Utara
             </span>
           </div>
-          <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
-            E-ARSIP KEMENAG
+          <h1 className="mt-2 sm:mt-3 text-2xl sm:text-4xl font-black tracking-tight text-slate-900">
+            E-ARSIP BETANG
           </h1>
-          <p className="mt-2 text-xs font-medium tracking-widest text-slate-500 uppercase">
+          <div className="mt-1 sm:mt-3 space-y-1.5 px-0 sm:px-4">
+            <p className="text-[11px] min-[400px]:text-xs sm:text-sm font-medium text-slate-700 leading-tight">
+              <span className="font-bold text-slate-900">B</span>asis <span className="font-bold text-slate-900">E</span>lektronik <span className="font-bold text-slate-900">T</span>ata <span className="font-bold text-slate-900">A</span>rsip dan <span className="font-bold text-slate-900">N</span>askah <span className="font-bold text-slate-900">G</span>abungan.
+            </p>
+          </div>
+          <p className="mt-6 text-xs font-medium tracking-widest text-slate-500 uppercase hidden">
             Kementerian Agama Kabupaten Barito Utara
           </p>
         </div>
@@ -145,6 +150,8 @@ export default function LoginPage() {
               </span>
             </div>
 
+            <input type="hidden" name="rememberMe" value={rememberMe.toString()} />
+
             <div className="flex w-full items-center justify-center py-2">
               <Turnstile
                 siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || ""}
@@ -160,6 +167,28 @@ export default function LoginPage() {
               disabled={isPending}
             >
               <span className="relative flex items-center gap-2">
+                {isPending && (
+                  <svg
+                    className="h-4 w-4 animate-spin text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
+                  </svg>
+                )}
                 {isPending ? "Memproses..." : "Masuk Ke Dashboard"}
                 {!isPending && (
                   <svg
@@ -184,7 +213,7 @@ export default function LoginPage() {
 
       <div className="relative z-10 mt-12 text-center">
         <p className="text-[10px] font-bold tracking-[0.2em] text-slate-400 uppercase">
-          © {new Date().getFullYear()} E-Arsip Kemenag Barito Utara
+          © {new Date().getFullYear()} E-Arsip BETANG Kemenag Barito Utara
         </p>
       </div>
     </div>
