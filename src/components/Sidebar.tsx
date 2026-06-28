@@ -76,7 +76,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
           </div>
           <div>
             <h2 className="text-sm font-bold tracking-wider text-white">
-              E-ARSIP BETANG
+              SI BETANG
             </h2>
             <p className="text-[10px] text-slate-400 tracking-widest uppercase">
               Kemenag Barito Utara

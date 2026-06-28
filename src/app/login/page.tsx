@@ -45,11 +45,12 @@ export default function LoginPage() {
             </span>
           </div>
           <h1 className="mt-2 sm:mt-3 text-2xl sm:text-4xl font-black tracking-tight text-slate-900">
-            E-ARSIP BETANG
+            SI BETANG
           </h1>
           <div className="mt-1 sm:mt-3 space-y-1.5 px-0 sm:px-4">
-            <p className="text-[11px] min-[400px]:text-xs sm:text-sm font-medium text-slate-700 leading-tight">
-              <span className="font-bold text-slate-900">B</span>asis <span className="font-bold text-slate-900">E</span>lektronik <span className="font-bold text-slate-900">T</span>ata <span className="font-bold text-slate-900">A</span>rsip dan <span className="font-bold text-slate-900">N</span>askah <span className="font-bold text-slate-900">G</span>abungan.
+            <p className="text-[11px] min-[400px]:text-xs sm:text-sm font-medium text-slate-700 leading-tight flex flex-col gap-0.5 sm:gap-1">
+              <span><span className="font-bold text-slate-900">S</span>istem <span className="font-bold text-slate-900">I</span>nformasi</span>
+              <span><span className="font-bold text-slate-900">B</span>asis <span className="font-bold text-slate-900">E</span>lektronik <span className="font-bold text-slate-900">T</span>ata <span className="font-bold text-slate-900">A</span>rsip dan <span className="font-bold text-slate-900">N</span>askah <span className="font-bold text-slate-900">G</span>abungan.</span>
             </p>
           </div>
           <p className="mt-6 text-xs font-medium tracking-widest text-slate-500 uppercase hidden">
@@ -213,7 +214,7 @@ export default function LoginPage() {
 
       <div className="relative z-10 mt-12 text-center">
         <p className="text-[10px] font-bold tracking-[0.2em] text-slate-400 uppercase">
-          © {new Date().getFullYear()} E-Arsip BETANG Kemenag Barito Utara
+          © {new Date().getFullYear()} SI BETANG Kemenag Barito Utara
         </p>
       </div>
     </div>

@@ -2,8 +2,8 @@ import { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'E-Arsip Kemenag Barito Utara',
-    short_name: 'E-Arsip',
+    name: 'SI BETANG Kemenag Barito Utara',
+    short_name: 'SI BETANG',
     description: 'Aplikasi Manajemen Arsip Digital Kementerian Agama Kabupaten Barito Utara',
     start_url: '/',
     display: 'standalone',
